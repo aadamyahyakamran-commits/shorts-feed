@@ -30,6 +30,7 @@
   #panel button { padding: 6px 12px; border: 0; border-radius: 14px; background: #ff0000; color: #fff; cursor: pointer; margin: 2px 4px 2px 0; }
   #warn { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #000; font-size: 14px; line-height: 1.5; z-index: 4; }
   #warn a { color: #3ea6ff; }
+  #st { position: absolute; left: 0; right: 0; top: 45%; text-align: center; padding: 0 20px; font-size: 13px; color: #aaa; z-index: 3; pointer-events: none; }
   #menu { position: absolute; left: 12px; top: 12px; z-index: 11; padding: 8px 14px; border: 0; border-radius: 16px; background: #272727; color: #fff; cursor: pointer; }
 </style>
 </head>
@@ -46,7 +47,7 @@
     <h3>Channel Shorts pages</h3>
     <div id="chlist"></div>
   </div>
-  <div id="wrap"><div id="player"></div><div id="warn"></div><div id="meta"><b id="mt"></b><span id="mc"></span></div></div>
+  <div id="wrap"><div id="player"></div><div id="warn"></div><div id="st">Tap Start to load</div><div id="meta"><b id="mt"></b><span id="mc"></span></div></div>
   <div class="nav"><button id="up" title="Back">&#9650;</button><button id="down" title="Next">&#9660;</button></div>
 </div>
 
@@ -88,8 +89,25 @@ function pick() {
   return { c: p[Math.floor(Math.random() * p.length)], i: Math.floor(Math.random() * 25), m: mutedMode };
 }
 var apiReady = false, built = 0, started = false, mutedMode = false;
+function setStatus(t) { document.getElementById("st").textContent = t || ""; }
+var plain = false;
+function playPlain(item) {
+  cur = item;
+  var old = document.getElementById("player");
+  if (old) old.remove();
+  var f = document.createElement("iframe");
+  f.id = "player";
+  f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+  f.allowFullscreen = true;
+  f.src = "https://www.youtube.com/embed/videoseries?list=" + pl(item.c) + "&index=" + item.i + "&autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1";
+  var wrap = document.getElementById("wrap");
+  wrap.insertBefore(f, wrap.firstChild);
+  document.getElementById("mt").textContent = item.c.n;
+  document.getElementById("mc").textContent = "";
+}
 function play(item) {
-  if (!apiReady) return;
+  if (!apiReady) { if (plain) playPlain(item); return; }
+  setStatus("Loading " + item.c.n + "...");
   cur = item;
   armWarn();
   var my = ++built;
@@ -110,11 +128,12 @@ function play(item) {
     events: {
       onStateChange: function (e) {
         if (my !== built) return;
-        if (e.data === 1) { if (mutedMode) document.getElementById("snd").style.display = "block"; clearTimeout(warnTimer); document.getElementById("warn").style.display = "none"; logCurrent(); }
+        if (e.data !== 1) setStatus("Player state " + e.data);
+        if (e.data === 1) { setStatus(""); if (mutedMode) document.getElementById("snd").style.display = "block"; clearTimeout(warnTimer); document.getElementById("warn").style.display = "none"; logCurrent(); }
         if (e.data === 0) next(); // auto-advance when a short ends
         if (e.data === 5) setTimeout(function () { if (my === built) skip(); }, 1500);
       },
-      onError: function () { if (my === built) skip(); } // 150/101 = owner blocked embedding, 100 = gone
+      onError: function (e) { if (my === built) { setStatus("YouTube error " + e.data); skip(); } } // 150/101 = owner blocked embedding, 100 = gone
     }
   });
 }
@@ -153,11 +172,23 @@ function armWarn() {
     }
   }, 4500);
 }
-function next() { if (!apiReady || !started) return; if (cur) stack.push(cur); tries = 0; play(pick()); }
+function next() { if (!started || (!apiReady && !plain)) return; if (cur) stack.push(cur); tries = 0; play(pick()); }
 function back() { if (apiReady && started && stack.length) { tries = 0; play(stack.pop()); } }
 
-function onYouTubeIframeAPIReady() { apiReady = true; if (started) next(); }
-function go() { document.getElementById("start").style.display = "none"; started = true; next(); }
+function onYouTubeIframeAPIReady() { apiReady = true; setStatus(""); if (started) next(); }
+function go() {
+  document.getElementById("start").style.display = "none"; started = true;
+  if (!apiReady) {
+    setStatus("Loading YouTube player...");
+    setTimeout(function () {
+      if (apiReady) return;
+      plain = true;
+      setStatus("YouTube's player script did not load, using basic mode (no auto-advance). Use the arrows for the next Short.");
+      next();
+    }, 4000);
+  }
+  next();
+}
 document.getElementById("start").onclick = go;
 document.getElementById("snd").onclick = function () {
   try { player.unMute(); player.setVolume(100); } catch (e) {}
@@ -229,9 +260,12 @@ document.getElementById("stage").addEventListener("touchend", function (e) {
   if (Math.abs(dy) > 60) dy > 0 ? next() : back();
 }, { passive: true });
 
-var s = document.createElement("script");
-s.src = "https://www.youtube.com/iframe_api";
-document.head.appendChild(s);
+if (location.search.indexOf("noapi") < 0) {
+  var s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  s.onerror = function () { setStatus("YouTube script blocked on this network or browser."); };
+  document.head.appendChild(s);
+}
 </script>
 </body>
 </html>

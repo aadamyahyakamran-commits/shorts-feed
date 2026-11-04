@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shorts Feed</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; touch-action: manipulation; background: #0f0f0f; color: #fff; font-family: Arial, sans-serif; overflow: hidden; }
+  @supports (height: 100dvh) { html, body { height: 100dvh; } }
+  #start { position: absolute; inset: 0; z-index: 20; background: #0f0f0fee; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; cursor: pointer; font-size: 20px; }
+  #start span { font-size: 13px; color: #aaa; }
+  #start b { background: #ff0000; border-radius: 28px; padding: 14px 34px; }
+  #snd { display: none; position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 12; padding: 10px 18px; border: 0; border-radius: 20px; background: #fff; color: #000; font-weight: bold; font-size: 14px; }
+  #chips { display: flex; gap: 6px; padding: 8px; background: #181818; overflow-x: auto; scrollbar-width: none; }
+  .chip { flex: none; padding: 7px 14px; border: 0; border-radius: 16px; background: #272727; color: #fff; cursor: pointer; font-size: 13px; }
+  .chip.on { background: #fff; color: #000; font-weight: bold; }
+  #stage { position: relative; height: calc(100% - 50px); display: flex; align-items: center; justify-content: center; }
+  #wrap { height: 97%; aspect-ratio: 9 / 16; max-width: 100%; background: #000; border-radius: 14px; overflow: hidden; position: relative; }
+  #wrap iframe { width: 100%; height: 100%; border: 0; }
+  #meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 12px 10px; background: linear-gradient(transparent, #000c); pointer-events: none; font-size: 13px; }
+  #meta b { display: block; margin-bottom: 2px; }
+  .nav { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 5; }
+  .nav button { width: 54px; height: 54px; border-radius: 50%; border: 0; background: #272727; color: #fff; font-size: 18px; cursor: pointer; }
+  .nav button:hover { background: #3f3f3f; }
+  #panel { position: absolute; top: 0; left: 0; bottom: 0; width: min(380px, 100%); background: #181818; z-index: 10; padding: 12px; overflow-y: auto; transform: translateX(-100%); transition: transform .2s; }
+  #panel.open { transform: none; }
+  #panel h3 { margin: 10px 0 6px; font-size: 14px; color: #aaa; }
+  #panel a { color: #3ea6ff; text-decoration: none; display: block; padding: 4px 0; font-size: 13px; word-break: break-all; }
+  #panel button { padding: 6px 12px; border: 0; border-radius: 14px; background: #ff0000; color: #fff; cursor: pointer; margin: 2px 4px 2px 0; }
+  #warn { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #000; font-size: 14px; line-height: 1.5; z-index: 4; }
+  #warn a { color: #3ea6ff; }
+  #menu { position: absolute; left: 12px; top: 12px; z-index: 11; padding: 8px 14px; border: 0; border-radius: 16px; background: #272727; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="chips"></div>
+<div id="stage">
+  <div id="start"><b>&#9654; Tap to start</b><span>Fortnite &middot; Minecraft &middot; Unstable SMP &middot; Fencing &middot; Tech</span></div>
+  <button id="snd">Tap for sound</button>
+  <button id="menu">Links</button>
+  <div id="panel">
+    <button id="copy">Copy watched links</button><button id="clear">Clear</button>
+    <h3>Watched Shorts (<span id="cnt">0</span>)</h3>
+    <div id="hist"></div>
+    <h3>Channel Shorts pages</h3>
+    <div id="chlist"></div>
+  </div>
+  <div id="wrap"><div id="player"></div><div id="warn"></div><div id="meta"><b id="mt"></b><span id="mc"></span></div></div>
+  <div class="nav"><button id="up" title="Back">&#9650;</button><button id="down" title="Next">&#9660;</button></div>
+</div>
+
+<script>
+// Tested channels only. Removed because the owners block embedding (YouTube error 150): Peter Bot, ParrotX2, Spoke, FlameFrags.
+// Verified channel IDs. Every channel's Shorts-only playlist is "UUSH" + id without the leading "UC".
+// Add more: { n: "Name", id: "UC...", h: "@handle", t: "tag" }
+var CH = [
+  { n: "Bugha",          id: "UCgIoEgOk3wzhhORNC9AbzhQ", h: "@bugha",           t: "comp" },
+  { n: "Bugha Shorts",   id: "UCtnX1uwIqBF4UZD5ftYBYAw", h: "",                  t: "comp" },
+  { n: "Clix",           id: "UCym0XKpmoSl594oT9yhEk0Q", h: "@clix",            t: "comp" },
+  { n: "Mongraal",       id: "UCpWim4NdcGFkG8x8kPROCwA", h: "@mongraal",        t: "fortnite" },
+  { n: "Dream",          id: "UCTkXRDQl0luXxVQrRQvWS6w", h: "@dream",           t: "minecraft" },
+  { n: "Sapnap",         id: "UCqynl7rdtktKMQESdSBmE-g", h: "@sapnap",          t: "minecraft" },
+  { n: "Wemmbu",         id: "UCkzzNLnuM-VsATWC53ehwOQ", h: "@wemmbumc",        t: "unstable" },
+  { n: "Wemmbu Clips",   id: "UCeMvjAr3mmBlkCa1Vmm7hWA", h: "@wemmbuclips",     t: "unstable" },
+  { n: "CyrusofChaos",   id: "UCjC3skzqXCykT08GLiTcKyg", h: "@cyrusofchaos",    t: "fencing" },
+  { n: "Shuya Ishizuka", id: "UCVjxRQPjiFtBTDQxUF5FtHg", h: "@shuyaishizuka",   t: "fencing" },
+  { n: "CarterPCs",      id: "UCi7wDE2ZTiR5QYYrUY5WhtA", h: "@actuallycarterpcs", t: "carter" },
+  { n: "Parker Burton",  id: "UCEeH57P89hPQ1Sp2TavfICA", h: "@parkerburton",    t: "parker" }
+];
+var TABS = [
+  ["all", "All"], ["comp", "Competitive Fortnite"], ["fortnite", "Fortnite"], ["minecraft", "Minecraft"],
+  ["unstable", "Unstable SMP"], ["fencing", "Fencing"], ["carter", "CarterPCs"], ["parker", "Parker Burton"]
+];
+var warnTimer = null;
+var tab = "all", player, cur = null, tries = 0, stack = [], hist = [], lastVid = null;
+
+function pl(c) { return "UUSH" + c.id.slice(2); }
+function pool() {
+  return CH.filter(function (c) {
+    if (tab === "all") return true;
+    if (tab === "fortnite") return c.t === "comp" || c.t === "fortnite";
+    return c.t === tab;
+  });
+}
+function pick() {
+  var p = pool();
+  return { c: p[Math.floor(Math.random() * p.length)], i: Math.floor(Math.random() * 25), m: mutedMode };
+}
+var apiReady = false, built = 0, started = false, mutedMode = false;
+function play(item) {
+  if (!apiReady) return;
+  cur = item;
+  armWarn();
+  var my = ++built;
+  document.getElementById("warn").style.display = "none";
+  try { if (player && player.destroy) player.destroy(); } catch (e) {}
+  var old = document.getElementById("player");
+  if (old) old.remove();
+  var div = document.createElement("div");
+  div.id = "player";
+  var wrap = document.getElementById("wrap");
+  wrap.insertBefore(div, wrap.firstChild);
+  document.getElementById("mt").textContent = item.c.n;
+  document.getElementById("mc").textContent = "";
+  // A brand-new player per Short: switching playlists on an existing player silently does nothing.
+  player = new YT.Player("player", {
+    width: "100%", height: "100%",
+    playerVars: { autoplay: 1, mute: item.m ? 1 : 0, playsinline: 1, rel: 0, modestbranding: 1, listType: "playlist", list: pl(item.c), index: item.i },
+    events: {
+      onStateChange: function (e) {
+        if (my !== built) return;
+        if (e.data === 1) { if (mutedMode) document.getElementById("snd").style.display = "block"; clearTimeout(warnTimer); document.getElementById("warn").style.display = "none"; logCurrent(); }
+        if (e.data === 0) next(); // auto-advance when a short ends
+        if (e.data === 5) setTimeout(function () { if (my === built) skip(); }, 1500);
+      },
+      onError: function () { if (my === built) skip(); } // 150/101 = owner blocked embedding, 100 = gone
+    }
+  });
+}
+function showWarn(msg) {
+  var w = document.getElementById("warn");
+  w.innerHTML = msg;
+  w.style.display = "flex";
+}
+function skip() {
+  // blocked, empty, index past the end, or stuck: try another channel
+  tries++;
+  if (tries > 8) {
+    showWarn("This Short isn't loading here.<br>If you're seeing this in a preview panel, YouTube blocks embeds there. " +
+      "Open the page in a normal browser tab or paste it into Google Sites (Insert > Embed > Embed code).<br><br>" +
+      '<a href="https://www.youtube.com/channel/' + (cur ? cur.c.id : "") + '/shorts" target="_blank" rel="noopener">Open ' + (cur ? cur.c.n : "channel") + " Shorts on YouTube</a>");
+    return;
+  }
+  var it = pick();
+  if (tries > 2) it.i = 0;
+  play(it);
+}
+function armWarn() {
+  clearTimeout(warnTimer);
+  warnTimer = setTimeout(function () {
+    var st = -2;
+    try { st = player.getPlayerState(); } catch (e) {}
+    if (st === 1 || st === 3 || st === 0) return;
+    if (cur && !cur.m) {
+      // autoplay with sound was probably blocked (phones do this): retry muted
+      mutedMode = true;
+      cur.m = true;
+      document.getElementById("snd").style.display = "block";
+      play(cur);
+    } else {
+      skip();
+    }
+  }, 4500);
+}
+function next() { if (!apiReady || !started) return; if (cur) stack.push(cur); tries = 0; play(pick()); }
+function back() { if (apiReady && started && stack.length) { tries = 0; play(stack.pop()); } }
+
+function onYouTubeIframeAPIReady() { apiReady = true; if (started) next(); }
+function go() { document.getElementById("start").style.display = "none"; started = true; next(); }
+document.getElementById("start").onclick = go;
+document.getElementById("snd").onclick = function () {
+  try { player.unMute(); player.setVolume(100); } catch (e) {}
+  mutedMode = false;
+  this.style.display = "none";
+};
+
+function logCurrent() {
+  try {
+    var d = player.getVideoData();
+    if (!d || !d.video_id || d.video_id === lastVid) return;
+    lastVid = d.video_id;
+    document.getElementById("mt").textContent = d.title || (cur && cur.c.n) || "";
+    document.getElementById("mc").textContent = d.author || (cur && cur.c.n) || "";
+    hist.unshift({ id: d.video_id, t: d.title || d.video_id });
+    renderHist();
+  } catch (e) {}
+}
+function renderHist() {
+  document.getElementById("cnt").textContent = hist.length;
+  document.getElementById("hist").innerHTML = hist.map(function (h) {
+    var u = "https://www.youtube.com/shorts/" + h.id;
+    return '<a href="' + u + '" target="_blank" rel="noopener">' + h.t.replace(/</g, "&lt;") + "<br>" + u + "</a>";
+  }).join("");
+}
+
+// UI
+var chips = document.getElementById("chips");
+TABS.forEach(function (t) {
+  var b = document.createElement("button");
+  b.className = "chip" + (t[0] === tab ? " on" : "");
+  b.textContent = t[1];
+  b.onclick = function () {
+    tab = t[0];
+    Array.prototype.forEach.call(chips.children, function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+    next();
+  };
+  chips.appendChild(b);
+});
+document.getElementById("chlist").innerHTML = CH.map(function (c) {
+  var u = "https://www.youtube.com/channel/" + c.id + "/shorts";
+  return '<a href="' + u + '" target="_blank" rel="noopener">' + c.n + " (" + c.t + ")<br>" + u + "</a>";
+}).join("");
+
+document.getElementById("menu").onclick = function () { document.getElementById("panel").classList.toggle("open"); };
+document.getElementById("copy").onclick = function () {
+  var txt = hist.map(function (h) { return h.t + " - https://www.youtube.com/shorts/" + h.id; }).join("\n");
+  try { navigator.clipboard.writeText(txt); } catch (e) {}
+};
+document.getElementById("clear").onclick = function () { hist = []; renderHist(); };
+document.getElementById("down").onclick = function () { next(); };
+document.getElementById("up").onclick = back;
+document.addEventListener("keydown", function (e) {
+  if (e.key === "ArrowDown") next();
+  if (e.key === "ArrowUp") back();
+});
+var wheelLock = false;
+document.getElementById("stage").addEventListener("wheel", function (e) {
+  if (wheelLock || Math.abs(e.deltaY) < 30) return;
+  wheelLock = true; setTimeout(function () { wheelLock = false; }, 700);
+  e.deltaY > 0 ? next() : back();
+}, { passive: true });
+var ty = null;
+document.getElementById("stage").addEventListener("touchstart", function (e) { ty = e.touches[0].clientY; }, { passive: true });
+document.getElementById("stage").addEventListener("touchend", function (e) {
+  if (ty === null) return;
+  var dy = ty - e.changedTouches[0].clientY; ty = null;
+  if (Math.abs(dy) > 60) dy > 0 ? next() : back();
+}, { passive: true });
+
+var s = document.createElement("script");
+s.src = "https://www.youtube.com/iframe_api";
+document.head.appendChild(s);
+</script>
+</body>
+</html>

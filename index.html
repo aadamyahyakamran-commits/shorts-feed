@@ -30,7 +30,8 @@
   #panel button { padding: 6px 12px; border: 0; border-radius: 14px; background: #ff0000; color: #fff; cursor: pointer; margin: 2px 4px 2px 0; }
   #warn { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #000; font-size: 14px; line-height: 1.5; z-index: 4; }
   #warn a { color: #3ea6ff; }
-  #st { position: absolute; left: 0; right: 0; top: 45%; text-align: center; padding: 0 20px; font-size: 13px; color: #aaa; z-index: 3; pointer-events: none; }
+  #st { position: absolute; left: 0; right: 0; top: 45%; text-align: center; padding: 0 20px; font-size: 13px; color: #aaa; z-index: 3; }
+  #st a { color: #3ea6ff; pointer-events: auto; }
   #menu { position: absolute; left: 12px; top: 12px; z-index: 11; padding: 8px 14px; border: 0; border-radius: 16px; background: #272727; color: #fff; cursor: pointer; }
 </style>
 </head>
@@ -89,7 +90,7 @@ function pick() {
   return { c: p[Math.floor(Math.random() * p.length)], i: Math.floor(Math.random() * 25), m: mutedMode };
 }
 var apiReady = false, built = 0, started = false, mutedMode = false;
-function setStatus(t) { document.getElementById("st").textContent = t || ""; }
+function setStatus(t, html) { var e = document.getElementById("st"); if (html) e.innerHTML = html; else e.textContent = t || ""; }
 var plain = false;
 function playPlain(item) {
   cur = item;
@@ -99,11 +100,13 @@ function playPlain(item) {
   f.id = "player";
   f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
   f.allowFullscreen = true;
-  f.src = "https://www.youtube.com/embed/videoseries?list=" + pl(item.c) + "&index=" + item.i + "&autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1";
+  f.src = "https://www.youtube-nocookie.com/embed/videoseries?list=" + pl(item.c) + "&index=" + item.i + "&autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1";
   var wrap = document.getElementById("wrap");
   wrap.insertBefore(f, wrap.firstChild);
   document.getElementById("mt").textContent = item.c.n;
   document.getElementById("mc").textContent = "";
+  var a = document.getElementById("yt");
+  if (a) a.href = "https://www.youtube.com/channel/" + item.c.id + "/shorts";
 }
 function play(item) {
   if (!apiReady) { if (plain) playPlain(item); return; }
@@ -183,7 +186,7 @@ function go() {
     setTimeout(function () {
       if (apiReady) return;
       plain = true;
-      setStatus("YouTube's player script did not load, using basic mode (no auto-advance). Use the arrows for the next Short.");
+      setStatus("", "Basic mode (no auto-advance). If this box stays blank, YouTube is blocked on this phone or network.<br><a id=\"yt\" target=\"_blank\" rel=\"noopener\">Open these Shorts on YouTube</a>");
       next();
     }, 4000);
   }

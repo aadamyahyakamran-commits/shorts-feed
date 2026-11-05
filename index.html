@@ -100,7 +100,7 @@ function playPlain(item) {
   f.id = "player";
   f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
   f.allowFullscreen = true;
-  f.src = "https://www.youtube-nocookie.com/embed/videoseries?list=" + pl(item.c) + "&index=" + item.i + "&autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1";
+  f.src = "https://www.youtube.com/embed/videoseries?list=" + pl(item.c) + "&index=" + item.i + "&autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1";
   var wrap = document.getElementById("wrap");
   wrap.insertBefore(f, wrap.firstChild);
   document.getElementById("mt").textContent = item.c.n;
